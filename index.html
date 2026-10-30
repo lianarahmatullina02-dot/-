@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Карта сокровищ — Уфа</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  :root{
+    --navy:#141e3c; --teal:#1f9e8f; --gold:#f2b94b; --blue:#3f5b8b;
+    --bg:#f4f6fb; --card:#ffffff; --text:#1a2233; --muted:#6b7690; --radius:18px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:"Segoe UI",system-ui,sans-serif;}
+  body{background:#000;display:flex;justify-content:center;color:var(--text);}
+  .phone{width:100%;max-width:430px;background:var(--bg);min-height:100vh;display:flex;flex-direction:column;position:relative;box-shadow:0 0 40px rgba(20,30,60,.2);}
+
+  header{background:linear-gradient(160deg,var(--navy),#22305c);color:#fff;padding:20px 18px 16px;border-radius:0 0 26px 26px;position:sticky;top:0;z-index:1000;}
+  header h1{font-size:19px;} header h1 span{color:var(--gold);}
+  header p{font-size:12px;color:#aab6d4;margin-top:3px;}
+  .stats{display:flex;gap:8px;margin-top:14px;}
+  .stat{flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px 10px;}
+  .stat b{display:block;font-size:16px;color:var(--gold);}
+  .stat small{font-size:10px;color:#aab6d4;text-transform:uppercase;letter-spacing:.6px;}
+
+  main{flex:1;padding:16px;overflow-y:auto;padding-bottom:90px;}
+
+  #map{height:320px;border-radius:var(--radius);margin-bottom:16px;box-shadow:0 4px 15px rgba(0,0,0,.1);z-index:1;}
+  .leaflet-control-attribution{font-size:8px!important;}
+
+  /* Навигационная подсказка под картой */
+  .nav-hint {
+    background: #fff;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 16px;
+    font-size: 12.5px;
+    color: var(--text);
+    box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    line-height: 1.6;
+  }
+  .nav-hint b { color: var(--navy); display: block; margin-bottom: 6px; font-size: 13px; }
+  .nav-hint .step { display: flex; gap: 8px; margin-bottom: 4px; }
+  .nav-hint .step-num { color: var(--teal); font-weight: 800; }
+
+  .section-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:16px 0 10px;}
+
+  .route{display:flex;flex-direction:column;gap:10px;}
+  .stop{background:var(--card);border-radius:var(--radius);padding:14px;display:flex;gap:12px;align-items:center;cursor:pointer;border:2px solid transparent;transition:.2s;box-shadow:0 3px 12px rgba(20,30,60,.06);}
+  .stop:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(20,30,60,.12);}
+  .stop.done{opacity:.7;}
+  .stop-num{width:38px;height:38px;flex:none;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;font-weight:700;font-size:15px;}
+  .stop.done .stop-num{background:var(--teal);}
+  .stop-info h3{font-size:14px;line-height:1.2;}
+  .stop-info p{font-size:11px;color:var(--muted);margin-top:3px;}
+  .stop-badge{margin-left:auto;font-size:10px;font-weight:700;color:var(--gold);background:rgba(242,185,75,.15);padding:4px 8px;border-radius:20px;}
+
+  .coffee-card{background:#fff;border-radius:12px;padding:10px;display:flex;align-items:center;gap:10px;border-left:4px solid var(--gold);margin-bottom:8px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.04);}
+  .coffee-card .icon{font-size:20px;}
+  .coffee-card p{color:var(--muted);font-size:11px;margin-top:2px;}
+
+  /* Детали */
+  .detail{display:none;animation:fade .3s ease;}
+  .detail.show{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .back{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--blue);font-weight:600;cursor:pointer;margin-bottom:12px;background:none;border:none;}
+
+  .tabs{display:flex;background:var(--card);border-radius:12px;padding:4px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,.05);}
+  .tabs button{flex:1;padding:8px;border:none;background:transparent;font-size:13px;font-weight:600;color:var(--muted);border-radius:8px;cursor:pointer;transition:.2s;}
+  .tabs button.active{background:var(--navy);color:#fff;}
+  .tab-content{display:none;}
+  .tab-content.active{display:block;}
+
+  .time-machine{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:0 6px 20px rgba(20,30,60,.1);}
+  .tm-view{position:relative;height:240px;overflow:hidden;background:#0e1530;cursor:zoom-in;}
+  .tm-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s ease;}
+  .tm-img.visible{opacity:1;}
+  .tm-years{position:absolute;top:12px;left:12px;display:flex;gap:6px;z-index:5;flex-wrap:wrap;}
+  .tm-years button{background:rgba(10,16,35,.7);color:#fff;border:1px solid rgba(255,255,255,.25);font-size:11px;font-weight:700;padding:5px 10px;border-radius:20px;cursor:pointer;backdrop-filter:blur(4px);transition:.2s;}
+  .tm-years button.on{background:var(--gold);color:var(--navy);border-color:var(--gold);}
+  .tm-label{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(10,16,35,.9));color:#fff;padding:20px 14px 12px;font-size:11px;line-height:1.4;}
+  .tm-label b{color:var(--gold);font-size:13px;}
+  .zoom-icon{position:absolute;bottom:12px;right:12px;background:rgba(0,0,0,.6);color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;pointer-events:none;}
+
+  /* Лайтбокс */
+  .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9999;justify-content:center;align-items:center;overflow:hidden;}
+  .lightbox.show{display:flex;}
+  .lightbox img{max-width:100%;max-height:100%;transition:transform .1s ease;cursor:grab;}
+  .lightbox img:active{cursor:grabbing;}
+  .lightbox .close{position:absolute;top:16px;right:16px;color:#fff;font-size:28px;background:rgba(255,255,255,.15);width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10000;}
+  .lightbox .hint{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.6);font-size:12px;text-align:center;pointer-events:none;}
+
+  /* Описание */
+  .description{background:var(--card);border-radius:var(--radius);padding:16px;box-shadow:0 4px 15px rgba(0,0,0,.06);}
+  .desc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;}
+  .description h3{font-size:15px;color:var(--navy);}
+  .description p{font-size:13px;line-height:1.65;color:var(--text);margin-bottom:8px;text-align:justify;}
+  .description .meta{font-size:11px;color:var(--muted);border-top:1px solid #eef2f8;padding-top:8px;margin-top:8px;}
+  .speak-btn{flex:none;background:var(--teal);color:#fff;border:none;width:40px;height:40px;border-radius:50%;font-size:18px;cursor:pointer;display:grid;place-items:center;transition:.2s;box-shadow:0 3px 10px rgba(31,158,143,.35);}
+  .speak-btn:hover{transform:scale(1.05);}
+  .speak-btn.on{background:var(--gold);color:var(--navy);animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(242,185,75,.6)}50%{box-shadow:0 0 0 10px rgba(242,185,75,0)}}
+
+  /* Тесты */
+  .quiz-container{background:var(--card);border-radius:var(--radius);padding:16px;box-shadow:0 4px 15px rgba(0,0,0,.06);}
+  .quiz-progress{font-size:11px;color:var(--muted);margin-bottom:12px;font-weight:600;}
+  .quiz-question{font-size:14px;font-weight:600;margin-bottom:12px;color:var(--navy);}
+  .quiz-options{display:flex;flex-direction:column;gap:8px;}
+  .quiz-opt{border:2px solid #e3e8f3;border-radius:12px;padding:11px 13px;font-size:13px;cursor:pointer;background:#fbfcfe;transition:.2s;font-weight:500;text-align:left;color:var(--text);}
+  .quiz-opt:hover{border-color:var(--blue);}
+  .quiz-opt.correct{border-color:var(--teal);background:rgba(31,158,143,.1);}
+  .quiz-opt.wrong{border-color:#e05a5a;background:rgba(224,90,90,.08);opacity:.7;}
+  .quiz-opt:disabled{cursor:default;}
+  .quiz-next{margin-top:14px;width:100%;padding:12px;border-radius:12px;border:none;background:var(--navy);color:#fff;font-size:14px;font-weight:600;cursor:pointer;display:none;}
+  .quiz-next.show{display:block;}
+  .quiz-finish{text-align:center;padding:20px 0;}
+  .quiz-finish .score{font-size:36px;font-weight:800;color:var(--teal);}
+  .quiz-finish p{font-size:13px;color:var(--muted);margin-top:6px;}
+
+  .reward{margin-top:14px;background:linear-gradient(150deg,#22305c,#141e3c);border-radius:var(--radius);padding:18px;text-align:center;color:#fff;display:none;}
+  .reward.show{display:block;animation:pop .4s ease;}
+  @keyframes pop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
+  .nft{width:90px;height:90px;margin:0 auto 10px;border-radius:20px;background:linear-gradient(135deg,var(--gold),#e8892f);display:grid;place-items:center;font-size:38px;box-shadow:0 0 30px rgba(242,185,75,.4);}
+  .reward h3{font-size:16px;color:var(--gold);margin-bottom:4px;}
+  .reward p{font-size:12px;color:#aab6d4;}
+  .discount{margin-top:12px;background:rgba(242,185,75,.15);border:1px dashed var(--gold);border-radius:12px;padding:10px;font-size:13px;color:var(--gold);font-weight:700;}
+
+  nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#fff;display:flex;border-top:1px solid #e6ebf5;padding:8px 0 12px;z-index:1000;}
+  nav button{flex:1;background:none;border:none;font-size:10px;color:var(--muted);font-weight:600;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;}
+  nav button .ico{font-size:20px;}
+  nav button.on{color:var(--teal);}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <header>
+    <h1>🗺️ Карта <span>сокровищ</span></h1>
+    <p>Уфа · Исторический центр</p>
+    <div class="stats">
+      <div class="stat"><b id="stat-found">0</b><small>найдено</small></div>
+      <div class="stat"><b id="stat-points">0</b><small>баллов</small></div>
+      <div class="stat"><b id="stat-level">Новичок</b><small>уровень</small></div>
+    </div>
+  </header>
+
+  <main>
+    <section id="screen-route">
+      <div id="map"></div>
+      
+      <!-- Текстовая навигация (вместо кривой линии) -->
+      <div class="nav-hint">
+        <b>🧭 Как пройти маршрут:</b>
+        <div class="step"><span class="step-num">1.</span> Начните у Гостиного двора (верхняя точка).</div>
+        <div class="step"><span class="step-num">2.</span> Спуститесь вниз по ул. Ленина до Национального музея (5 минут пешком).</div>
+        <div class="step"><span class="step-num">3.</span> Пройдите по ул. Заки Валиди вниз к реке — там будет Дом Аксакова (7 минут).</div>
+        <div class="step"><span class="step-num">4.</span> Вернитесь обратно в центр и дойдите до Театра оперы и балета (10 минут).</div>
+      </div>
+
+      <div class="section-title">Точки маршрута</div>
+      <div class="route" id="routeList"></div>
+
+      <div class="section-title">☕ Кофейни-партнеры</div>
+      <div class="coffee-card">
+        <div class="icon">☕</div>
+        <div><b>Кофейня «Старый город»</b><p>ул. Октябрьской Революции, 10 · Скидка 15% по NFT</p></div>
+      </div>
+      <div class="coffee-card">
+        <div class="icon">🥐</div>
+        <div><b>Пекарня «Купеческая»</b><p>ул. Мустая Карима, 15 · Скидка 10% по NFT</p></div>
+      </div>
+    </section>
+
+    <section class="detail" id="screen-detail">
+      <button class="back" onclick="goRoute()">← Назад к карте</button>
+
+      <div class="tabs">
+        <button id="tabBtnInfo" class="active" onclick="switchTab('info')">📖 История</button>
+        <button id="tabBtnQuiz" onclick="switchTab('quiz')">🏆 Тест</button>
+      </div>
+
+      <div class="tab-content active" id="tab-info">
+        <div class="time-machine">
+          <div class="tm-view" id="tmView">
+            <div class="tm-years" id="tmYears"></div>
+            <img class="tm-img" id="imgA" alt="">
+            <img class="tm-img" id="imgB" alt="">
+            <div class="tm-label" id="tmLabel"></div>
+            <div class="zoom-icon">🔍</div>
+          </div>
+        </div>
+
+        <div class="description" id="detailDesc" style="margin-top:14px;">
+          <div class="desc-head">
+            <h3 id="descTitle"></h3>
+            <button class="speak-btn" id="speakBtn" title="Озвучить описание">🔊</button>
+          </div>
+          <p id="descText"></p>
+          <div class="meta" id="descMeta"></div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-quiz">
+        <div class="quiz-container" id="quizBox"></div>
+      </div>
+
+      <div class="reward" id="reward">
+        <div class="nft" id="nftIcon">🎖️</div>
+        <h3 id="nftTitle">NFT-стикер получен!</h3>
+        <p id="nftSub"></p>
+        <div class="discount" id="discountBox"></div>
+      </div>
+    </section>
+
+    <section class="detail" id="screen-collection">
+      <div class="section-title">Моя коллекция NFT</div>
+      <div id="collectionList" style="display:flex;flex-direction:column;gap:10px"></div>
+      <p id="colEmpty" style="font-size:13px;color:var(--muted);text-align:center;padding:30px 0">Пока пусто. Пройдите маршрут ✨</p>
+    </section>
+  </main>
+
+  <nav>
+    <button id="navRoute" class="on" onclick="goRoute()"><span class="ico">🗺️</span>Карта</button>
+    <button id="navCol" onclick="goCollection()"><span class="ico">🎖️</span>Коллекция</button>
+  </nav>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <div class="close" onclick="closeLightbox()">✕</div>
+  <img id="lightboxImg" alt="">
+  <div class="hint">Двумя пальцами или колесом мыши — приблизить</div>
+</div>
+
+<script>
+/* =======================================================
+   ДАННЫЕ
+   ======================================================= */
+const LOCATIONS = [
+  {
+    id: 1, name: 'Гостиный двор', year: '1825–1866',
+    lat: 54.7268, lng: 55.9459,
+    desc: 'Друзья, мы стоим в самом сердце старой Уфы — на Верхнеторговой площади. Перед нами Гостиный двор, чья история началась почти двести лет назад. Стройка шла долго, целых сорок лет, по проекту архитектора Алексея Мельникова, и завершилась только в 1866 году. Представьте: сюда съезжались купцы со всей губернии — торговали мёдом, пушниной, тканями и чаем. Аркады первого этажа служили витринами, а на втором этаже хранили товар. В советские годы здесь шумел хлопчатобумажный комбинат, и величественное здание постепенно ветшало. В девяностые от него остались лишь руины — обрушились перекрытия, уцелела только аркада. Но город не сдался: в 1999 году Гостиный двор воссоздали по архивным чертежам, а в 2015-м провели масштабную реконструкцию.',
+    meta: 'Архитектор: А.И. Мельников · Стиль: классицизм',
+    epochs: [
+  { label: '1920', url: 'https://allwebs.ru/images/2026/10/30/d94ed74d7beb668f3f2a0fa7e2140382.jpg', note: 'Повозки, торговые лавки.' },
+  { label: '1980', url: 'https://allwebs.ru/images/2026/10/30/51bc2397a00ab1fd2f81434b9eec5136.jpg', note: 'Руины здания до реставрации.' },
+  { label: '1999', url: 'https://allwebs.ru/images/2026/10/30/4e0960941f75bf8c5f484f6aa43b8466.jpg', note: 'Восстановлен в 1999.' },
+  { label: 'Сейчас', url: 'https://allwebs.ru/images/2026/10/30/bdb982e4486e1589d6a361714de3a5c6.jpg', note: 'Магазины, парковка и площадь.' }
+],
+    quizzes: [
+      { q: 'В каком году завершилось строительство Гостиного двора?', opts: ['1825', '1866', '1900', '1917'], ans: 1 },
+      { q: 'Кто был архитектором проекта?', opts: ['А.И. Мельников', 'К.А. Тон', 'Ф.О. Шехтель', 'В.П. Стасов'], ans: 0 },
+      { q: 'В каком году Гостиный двор воссоздали после руин?', opts: ['1985', '1991', '1999', '2015'], ans: 2 }
+    ],
+    nft: '🏛️', nftName: 'Купец Уфы', discount: '☕ Скидка 15% в кофейне «Старый город»'
+  },
+  {
+    id: 2, name: 'Национальный музей РБ', year: '1860-е',
+    lat: 54.7222, lng: 55.9472,
+    desc: 'А теперь перенесёмся в здание, где хранится вся история Башкортостана. Национальный музей республики — один из старейших в России, он основан в 1864 году, ещё при царской власти. Само здание — бывшее Дворянское собрание, здесь устраивали балы, литературные вечера, а в грозные годы заседали революционные комитеты. Сегодня в фондах музея больше двухсот тысяч экспонатов. Чего здесь только нет: сарматское золото, оружие времён Пугачёвского восстания, шаманские бубны, старинные рукописи.',
+    meta: 'Основан: 1864 · Более 200 тыс. экспонатов',
+     epochs: [
+  { label: 'Сейчас', url: '', note: 'Фотографии пока нет.' }
+],
+    quizzes: [
+      { q: 'В каком году был основан Национальный музей?', opts: ['1825', '1864', '1917', '1945'], ans: 1 },
+      { q: 'Какое здание занимает музей?', opts: ['Купеческий особняк', 'Дворянское собрание', 'Гостиный двор', 'Городская дума'], ans: 1 },
+      { q: 'Сколько экспонатов в фондах музея?', opts: ['Около 50 тыс.', 'Около 100 тыс.', 'Более 200 тыс.', 'Более 1 млн'], ans: 2 }
+    ],
+    nft: '🏺', nftName: 'Хранитель древностей', discount: '🥐 Скидка 10% в пекарне «Купеческая»'
+  },
+  {
+    id: 3, name: 'Дом-музей С.Т. Аксакова', year: '1790-е',
+    lat: 54.7205, lng: 55.9499,
+    desc: 'Слышите, как шумит река Белая? Мы подходим к деревянному особняку, где прошло детство писателя Сергея Тимофеевича Аксакова — того самого, кто подарил нам «Аленький цветочек». Дом на склоне был построен в конце XVIII века, и в нём семья Аксаковых жила до пожара 1811 года. Долгое время место оставалось пустым, пока в 1991 году, к двухсотлетию писателя, особняк не воссоздали по старинным чертежам. Внутри — подлинные вещи: старинное пианино, детские книги, мебель красного дерева.',
+    meta: 'Воссоздан: 1991',
+     epochs: [
+  { label: 'Сейчас', url: '', note: 'Фотографии пока нет.' }
+],
+    quizzes: [
+      { q: 'Какое произведение написал С.Т. Аксаков?', opts: ['«Война и мир»', '«Аленький цветочек»', '«Мёртвые души»', '«Отцы и дети»'], ans: 1 },
+      { q: 'В каком году воссоздали дом-музей?', opts: ['1975', '1985', '1991', '2000'], ans: 2 },
+      { q: 'Что случилось с домом в 1811 году?', opts: ['Пожар', 'Наводнение', 'Реконструкция', 'Снос'], ans: 0 }
+    ],
+    nft: '🌺', nftName: 'Аленький цветочек', discount: '🍩 Скидка 20% в кондитерской «Искра»'
+  },
+  {
+    id: 4, name: 'Театр оперы и балета', year: '1938',
+    lat: 54.7242, lng: 55.9416,
+    desc: 'Завершаем наш маршрут у величественного здания с колоннадой — Башкирского театра оперы и балета. Он открылся в 1938 году, и уже тогда стал главной музыкальной сценой республики. Архитектура — советский неоклассицизм: строгие колонны, лепнина, широкие мраморные лестницы. В военные годы здесь выступали эвакуированные артисты Большого театра, а в 1955-м на этой сцене прошла премьера оперы «Салават Юлаев».',
+    meta: 'Открыт: 1938 · Зал: 800 мест',
+     epochs: [
+  { label: 'Сейчас', url: '', note: 'Фотографии пока нет.' }
+],
+    quizzes: [
+      { q: 'В каком году открылся театр?', opts: ['1917', '1938', '1955', '1970'], ans: 1 },
+      { q: 'Какая опера стала визитной карточкой театра?', opts: ['«Евгений Онегин»', '«Салават Юлаев»', '«Кармен»', '«Лебединое озеро»'], ans: 1 },
+      { q: 'В каком стиле построено здание театра?', opts: ['Модерн', 'Барокко', 'Советский неоклассицизм', 'Готика'], ans: 2 }
+    ],
+    nft: '🎭', nftName: 'Мельпомена', discount: '☕ Скидка 10% в кофейне «Старый город»'
+  }
+];
+
+const state = { points: 0, found: new Set() };
+let map;
+let current = null, epochIndex = 0, isSpeaking = false;
+let quizState = { index: 0, score: 0, answered: false };
+
+/* =======================================================
+   КАРТА: ПУНКТИРНЫЕ ЛИНИИ И АККУРАТНЫЕ МАРКЕРЫ
+   ======================================================= */
+function initMap() {
+  map = L.map('map', { zoomControl: false }).setView([54.7235, 55.9465], 15);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19
+  }).addTo(map);
+
+  const points = LOCATIONS.map(l => [l.lat, l.lng]);
+
+  // Рисуем пунктирные линии между точками по очереди (1->2, 2->3, 3->4)
+  for (let i = 0; i < points.length - 1; i++) {
+    L.polyline([points[i], points[i+1]], {
+      color: '#1f9e8f',
+      weight: 4,
+      opacity: 0.8,
+      dashArray: '10, 10', // Пунктир
+      lineJoin: 'round'
+    }).addTo(map);
+  }
+
+  // Маркеры
+  LOCATIONS.forEach((loc, i) => {
+    const isDone = state.found.has(loc.id);
+    L.marker([loc.lat, loc.lng], {
+      icon: L.divIcon({
+        className: 'custom-marker',
+        html: `<div style="width:32px;height:32px;border-radius:50%;background:${isDone ? '#1f9e8f' : '#3f5b8b'};border:3px solid #f2b94b;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.4);">${i+1}</div>`,
+        iconSize: [32, 32], iconAnchor: [16, 16]
+      })
+    }).addTo(map).on('click', () => openDetail(loc.id));
+  });
+
+  map.fitBounds(L.latLngBounds(points), { padding: [40, 40] });
+}
+
+/* =======================================================
+   ВКЛАДКИ
+   ======================================================= */
+function switchTab(tab) {
+  document.getElementById('tab-info').classList.toggle('active', tab === 'info');
+  document.getElementById('tab-quiz').classList.toggle('active', tab === 'quiz');
+  document.getElementById('tabBtnInfo').classList.toggle('active', tab === 'info');
+  document.getElementById('tabBtnQuiz').classList.toggle('active', tab === 'quiz');
+}
+
+/* =======================================================
+   ДЕТАЛИ
+   ======================================================= */
+function openDetail(id) {
+  current = LOCATIONS.find(l => l.id === id);
+  epochIndex = 0;
+  stopSpeaking();
+  showScreen('screen-detail');
+  document.getElementById('navRoute').classList.remove('on');
+
+  switchTab('info');
+
+  document.getElementById('descTitle').textContent = current.name;
+  document.getElementById('descText').textContent = current.desc;
+  document.getElementById('descMeta').textContent = current.meta;
+
+  const years = document.getElementById('tmYears');
+  years.innerHTML = '';
+  current.epochs.forEach((e, i) => {
+    const b = document.createElement('button');
+    b.textContent = e.label;
+    b.onclick = () => setEpoch(i);
+    years.appendChild(b);
+  });
+
+  setEpoch(0);
+  initQuiz();
+  document.getElementById('reward').classList.remove('show');
+
+  const btn = document.getElementById('speakBtn');
+  btn.classList.remove('on');
+  btn.onclick = () => toggleSpeak(current.desc);
+}
+
+function setEpoch(i) {
+  const e = current.epochs[i];
+  document.querySelectorAll('.tm-years button').forEach((b, idx) =>
+    b.classList.toggle('on', idx === i)
+  );
+  const imgs = ['imgA', 'imgB'].map(id => document.getElementById(id));
+  const active = imgs.find(img => img.classList.contains('visible')) || imgs[0];
+  const next = imgs.find(img => img !== active);
+  next.src = e.url;
+  next.onload = () => { active.classList.remove('visible'); next.classList.add('visible'); };
+  if (next.complete) { active.classList.remove('visible'); next.classList.add('visible'); }
+  document.getElementById('tmLabel').innerHTML = `<b>${e.label}</b> — ${e.note}`;
+}
+
+/* =======================================================
+   ЗУМ ФОТО
+   ======================================================= */
+document.getElementById('tmView').addEventListener('click', (e) => {
+  // Если клик пришёлся на кнопку эпохи — не открываем лайтбокс
+  if (e.target.closest('.tm-years') || e.target.tagName === 'BUTTON') return;
+  
+  const visible = ['imgA', 'imgB'].map(id => document.getElementById(id))
+    .find(img => img.classList.contains('visible'));
+  if (visible && visible.src) openLightbox(visible.src);
+});
+
+function openLightbox(src) {
+  const lb = document.getElementById('lightbox');
+  const img = document.getElementById('lightboxImg');
+  img.src = src;
+  img.style.transform = 'scale(1)';
+  lb.classList.add('show');
+  initZoom(img);
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('show');
+}
+
+function initZoom(img) {
+  let scale = 1, startDist = 0, startScale = 1, posX = 0, posY = 0, startX = 0, startY = 0, isDragging = false;
+
+  img.ontouchstart = (e) => {
+    if (e.touches.length === 2) {
+      startDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      startScale = scale;
+    } else if (e.touches.length === 1) {
+      isDragging = true;
+      startX = e.touches[0].clientX - posX;
+      startY = e.touches[0].clientY - posY;
+    }
+  };
+  img.ontouchmove = (e) => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      scale = Math.min(5, Math.max(1, startScale * (dist / startDist)));
+      applyTransform();
+    } else if (e.touches.length === 1 && isDragging && scale > 1) {
+      posX = e.touches[0].clientX - startX;
+      posY = e.touches[0].clientY - startY;
+      applyTransform();
+    }
+  };
+  img.ontouchend = () => { isDragging = false; };
+
+  img.onwheel = (e) => {
+    e.preventDefault();
+    scale = Math.min(5, Math.max(1, scale - e.deltaY * 0.001));
+    applyTransform();
+  };
+  img.ondblclick = () => {
+    scale = scale === 1 ? 2.5 : 1;
+    posX = 0; posY = 0;
+    applyTransform();
+  };
+
+  function applyTransform() {
+    img.style.transform = `scale(${scale}) translate(${posX / scale}px, ${posY / scale}px)`;
+  }
+}
+
+/* =======================================================
+   ТЕСТ (КВИЗ)
+   ======================================================= */
+function initQuiz() {
+  quizState = { index: 0, score: 0, answered: false };
+  renderQuestion();
+}
+
+function renderQuestion() {
+  const box = document.getElementById('quizBox');
+  const q = current.quizzes[quizState.index];
+  
+  if (quizState.index >= current.quizzes.length) {
+    box.innerHTML = `
+      <div class="quiz-finish">
+        <div class="score">${quizState.score} / ${current.quizzes.length}</div>
+        <p>${quizState.score === current.quizzes.length ? 'Отлично! Вы настоящий знаток!' : 'Хороший результат, но можно лучше!'}</p>
+        <button class="quiz-next show" onclick="finishQuiz()">Забрать награду</button>
+      </div>
+    `;
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="quiz-progress">Вопрос ${quizState.index + 1} из ${current.quizzes.length}</div>
+    <div class="quiz-question">${q.q}</div>
+    <div class="quiz-options" id="quizOpts"></div>
+    <button class="quiz-next" id="quizNext" onclick="nextQuestion()">Далее →</button>
+  `;
+
+  const optsBox = document.getElementById('quizOpts');
+  q.opts.forEach((opt, i) => {
+    const b = document.createElement('button');
+    b.className = 'quiz-opt';
+    b.textContent = opt;
+    b.onclick = () => answerQuiz(i, b);
+    optsBox.appendChild(b);
+  });
+
+  quizState.answered = false;
+}
+
+function answerQuiz(i, btn) {
+  if (quizState.answered) return;
+  quizState.answered = true;
+
+  const q = current.quizzes[quizState.index];
+  const opts = document.querySelectorAll('#quizOpts .quiz-opt');
+  opts.forEach(o => o.disabled = true);
+
+  if (i === q.ans) {
+    btn.classList.add('correct');
+    quizState.score++;
+  } else {
+    btn.classList.add('wrong');
+    opts[q.ans].classList.add('correct');
+  }
+
+  document.getElementById('quizNext').classList.add('show');
+}
+
+function nextQuestion() {
+  quizState.index++;
+  renderQuestion();
+}
+
+function finishQuiz() {
+  if (!state.found.has(current.id)) {
+    state.found.add(current.id);
+    state.points += 100;
+    document.getElementById('nftIcon').textContent = current.nft;
+    document.getElementById('nftTitle').textContent = 'NFT-стикер получен!';
+    document.getElementById('nftSub').textContent = `«${current.nftName}» добавлен в коллекцию`;
+    document.getElementById('discountBox').textContent = current.discount;
+    updateStats();
+    renderRoute();
+    if (map) { map.remove(); initMap(); }
+  }
+  
+  document.getElementById('reward').classList.add('show');
+  switchTab('info');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* =======================================================
+   ОЗВУЧКА
+   ======================================================= */
+function getBestRussianVoice() {
+  const voices = speechSynthesis.getVoices();
+  return voices.find(v => v.lang.startsWith('ru') && v.name.includes('Google')) ||
+         voices.find(v => v.lang.startsWith('ru') && v.name.includes('Microsoft')) ||
+         voices.find(v => v.lang.startsWith('ru'));
+}
+
+function toggleSpeak(text) {
+  const btn = document.getElementById('speakBtn');
+  if (isSpeaking) { stopSpeaking(); return; }
+  if (!('speechSynthesis' in window)) return alert('Браузер не поддерживает озвучку.');
+
+  if (speechSynthesis.getVoices().length === 0) {
+    speechSynthesis.onvoiceschanged = () => {
+      speechSynthesis.onvoiceschanged = null;
+      startSpeak(text, btn);
+    };
+  } else {
+    startSpeak(text, btn);
+  }
+}
+
+function startSpeak(text, btn) {
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'ru-RU';
+  utter.rate = 0.9;
+  const best = getBestRussianVoice();
+  if (best) utter.voice = best;
+  utter.onstart = () => { isSpeaking = true; btn.classList.add('on'); btn.textContent = '⏸'; };
+  utter.onend = () => { isSpeaking = false; btn.classList.remove('on'); btn.textContent = '🔊'; };
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utter);
+}
+
+function stopSpeaking() {
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  isSpeaking = false;
+  const btn = document.getElementById('speakBtn');
+  if (btn) { btn.classList.remove('on'); btn.textContent = '🔊'; }
+}
+
+/* =======================================================
+   ОСТАЛЬНАЯ ЛОГИКА
+   ======================================================= */
+function renderRoute() {
+  const list = document.getElementById('routeList');
+  list.innerHTML = '';
+  LOCATIONS.forEach((l, i) => {
+    const done = state.found.has(l.id);
+    const div = document.createElement('div');
+    div.className = 'stop' + (done ? ' done' : '');
+    div.innerHTML = `
+      <div class="stop-num">${i+1}</div>
+      <div class="stop-info">
+        <h3>${l.name}</h3>
+        <p>${l.year}</p>
+      </div>
+      <div class="stop-badge">${done ? '+100' : 'QR'}</div>
+    `;
+    div.onclick = () => openDetail(l.id);
+    list.appendChild(div);
+  });
+  updateStats();
+}
+
+function updateStats() {
+  document.getElementById('stat-found').textContent = state.found.size;
+  document.getElementById('stat-points').textContent = state.points;
+  document.getElementById('stat-level').textContent =
+    state.points >= 300 ? 'Легенда' : state.points >= 100 ? 'Знаток' : 'Новичок';
+}
+
+function goCollection() {
+  stopSpeaking();
+  showScreen('screen-collection');
+  document.getElementById('navRoute').classList.remove('on');
+  document.getElementById('navCol').classList.add('on');
+  const list = document.getElementById('collectionList');
+  list.innerHTML = '';
+  const found = LOCATIONS.filter(l => state.found.has(l.id));
+  document.getElementById('colEmpty').style.display = found.length ? 'none' : 'block';
+  found.forEach(l => {
+    const d = document.createElement('div');
+    d.className = 'stop';
+    d.innerHTML = `<div class="stop-num" style="background:var(--gold);color:var(--navy)">${l.nft}</div><div class="stop-info"><h3>${l.nftName}</h3><p>${l.name}</p></div><div class="stop-badge">NFT</div>`;
+    list.appendChild(d);
+  });
+}
+
+function showScreen(id) {
+  ['screen-route', 'screen-detail', 'screen-collection'].forEach(s =>
+    document.getElementById(s).classList.toggle('show', s === id)
+  );
+  document.getElementById('screen-route').style.display = id === 'screen-route' ? 'block' : 'none';
+}
+
+function goRoute() {
+  stopSpeaking();
+  showScreen('screen-route');
+  document.getElementById('screen-route').style.display = 'block';
+  document.getElementById('screen-detail').classList.remove('show');
+  document.getElementById('screen-collection').classList.remove('show');
+  document.getElementById('navRoute').classList.add('on');
+  document.getElementById('navCol').classList.remove('on');
+  renderRoute();
+}
+
+renderRoute();
+showScreen('screen-route');
+document.getElementById('screen-route').style.display = 'block';
+initMap();
+</script>
+</body>
+</html>
